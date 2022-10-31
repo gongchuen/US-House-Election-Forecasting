@@ -1,0 +1,397 @@
+---
+title: "US House Election Forecasting"
+output: html_document
+date: "2022-10-29"
+---
+
+## Load Packages and Data
+
+```{r}
+library(tidyverse)
+library(fpp2)
+library(dplyr)
+library(gridExtra)
+
+#Load Files
+elec <- read.csv("US House Election Results 2.csv")
+cs <- read.csv("Average Consumer Sentiment every 2 years.csv")
+ar <- read.csv("Approval Ratings.csv")
+
+#Converting into Timeseries
+elec_ts <- ts(elec, start = 1978, deltat = 2)
+cs_ts <- ts(cs, start = 1980, deltat = 2)
+ar <- ar[,4]
+ar_ts <- window(ts(ar, start = 1970, deltat = 2), start = 1980)
+
+```
+
+
+## Model
+
+The model looks at how many seats the incumbent President's party will gain.
+
+The model variables include
+
+(1) Average Consumer Sentiment Index since the congress was last sworn in
+
+(2) The number of seats held by the Incumbent President's Party
+
+(3) Is the incumbent President running for re-election in that election year? 
+
+(4) Is the President hugely popular?
+
+(5) Is the President a Democrat or a Republican?
+```{r}
+incum_party_change <- window(elec_ts[,12], start= 1980)
+incum_running <- window(elec_ts[,10], start= 1980)
+pres_party_seats <- window(elec_ts[,13], start = 1980)
+cs_ts <- window(cs_ts[,2], start = 1980, end = 2020)
+pres <- window(elec_ts[,"President"], start = 1980)
+
+model2 <- tslm(incum_party_change~ cs_ts + incum_running + I(pres_party_seats^2) + ar_ts + pres)
+summary(model2) #Adjusted R^2 of 0.805
+
+```
+### Comments:
+The model has an Adjusted R^2 of 0.8849. All the variables are significant at a 10% level of significance.
+
+
+The p-value of the consumer sentiment variable strongly implies that consumer sentiment (Economic Variable) has an impact on the congressional election.
+
+
+Also, the result suggests incumbent the incumbent President can help his/her party if he/she is running in that election year. Of course, this is only possible when the congressional election takes place in a Presidential election year.
+
+Furthermore, if the incumbent President's party was holding onto many seats, the party is bound to lose more seats. Due to gerrymandering, there will always be a fixed number of safely Republican or Democrat seats. The remaining seats are competitive and can swing both ways. If a party won big in the last election, it's quite likely that the party is holding many competitive seats. Usually, the competitive seats swing against the incumbent President's party. If the incumbent President's party has won many such seats in the last election, the party will likely lose many seats as the party will have a tough time defending competitive seats.
+
+The model also suggests that Democratic Presidents tend to be able to help their party more than Republican presidents.
+
+The popularity of a President only matters if the President is hugely popular. In 2002, President Bush was popular enough to support his party and the GOP won seats in an environment that was supposed to be tough for them. 
+
+
+## Model's Performance: Quantitative Measures
+
+```{r}
+accuracy(model2) #Mean Absolute Error is 5.4 Seats.
+```
+
+### Comments:
+The model has an In-Sample mean absolute error of 5.4 seats. This means that the model has an average error of about 5 seats.
+
+## Model's Performance: Visualization
+
+```{r}
+
+plot1 <- autoplot(fitted(model2), series = "Predicted", lwd =1,lty = 2,) +
+  autolayer(elec_ts[,12], series = "Actual", lwd =1) +
+  labs( title = "Model's In-Sample Performance", 
+    subtitle = "House Seat Changes for Incumbent President's Party" ,
+        y = "")
+
+pred_DEM_seats <- NA
+for (i in 1:(length(elec$GOP.Vote.Share)-1)) {
+  
+  if (elec$President[i+1] == 0){
+    
+    pred_DEM_seats<- c(pred_DEM_seats, elec$DEM.Seats[i] + 
+                                 round(model2$fitted.values[[i]],0))
+  } else {
+    
+    pred_DEM_seats <- c(pred_DEM_seats, elec$DEM.Seats[i] - 
+                                 round(model2$fitted.values[[i]],0))
+  }
+  
+}
+
+
+pred_GOP_seats <- NA
+for (i in 1:(length(elec$GOP.Vote.Share)-1)) {
+  
+  if (elec$President[i+1] == 1){
+    
+    pred_GOP_seats <- c(pred_GOP_seats, elec$GOP.Seats[i] + 
+                         round(model2$fitted.values[[i]],0))
+  } else {
+    
+    pred_GOP_seats <- c(pred_GOP_seats, elec$GOP.Seats[i] - 
+                          round(model2$fitted.values[[i]],0))
+  }
+  
+}
+elec <- cbind(elec, pred_GOP_seats, pred_DEM_seats)
+
+plot2 <- autoplot(ts( start = 1978, deltat = 2)) + 
+  autolayer(window(elec_ts[,4], start =1980), lwd =1,color = "Red") + 
+  autolayer(ts(pred_GOP_seats, start = 1978, deltat = 2), series = "Predicted GOP Seats", lty = 2, lwd = 1, color = "Red") +
+  autolayer(window(elec_ts[,5], start =1980), lwd =1, color = "Blue") +
+  autolayer(ts(pred_DEM_seats, start = 1978, deltat = 2), series = "Predicted DEM Seats", lty = 2, lwd = 1, color = "Blue") +  
+  labs( title = "Model's In-Sample Performance",
+        subtitle = "Actual Seats (Solid) vs Pedicted Seats (Dashed)",
+        y = "Seats") 
+
+grid.arrange(plot1, plot2)
+```
+
+## Did the Model correctly predict which party controls the House ?
+```{r}
+pred_pres_house_seats <- NA
+for (i in 1:(length(elec$GOP.Vote.Share)-1)) {
+  
+  if (elec$President[i+1] == 0){
+    
+    pred_pres_house_seats <- c(pred_pres_house_seats, elec$DEM.Seats[i] + 
+                                 round(model2$fitted.values[[i]],0))
+  } else {
+    
+    pred_pres_house_seats <- c(pred_pres_house_seats, elec$GOP.Seats[i] + 
+                                 round(model2$fitted.values[[i]],0))
+  }
+  
+}
+elec <- data.frame(elec,pred_pres_house_seats)
+
+#Create column to show which party is predicted to control the House
+pred_party_control <- NA
+for (i in 1:(length(elec$GOP.Vote.Share)-1)) {
+  
+  if (elec$President[i+1] == 0 & elec$pred_pres_house_seats[i+1] >= 218 ){
+    
+    pred_party_control <- c(pred_party_control,"Predicted Democrat Control" )
+    
+  } else if (elec$President[i+1] == 0 & elec$pred_pres_house_seats[i+1] < 218) {
+    
+    pred_party_control <- c(pred_party_control, "Predicted Republican Control")
+    
+  } else if (elec$President[i+1] == 1 & elec$pred_pres_house_seats[i+1] >= 218) {
+    
+    pred_party_control <- c(pred_party_control, "Predicted Republican Control" )
+    
+  } else if (elec$President[i+1] == 1 & elec$pred_pres_house_seats[i+1] < 218) {
+    
+    pred_party_control <- c(pred_party_control, "Predicted Democrat Control" )
+  }
+  
+}
+
+elec <- data.frame(elec,pred_pres_house_seats,pred_party_control)
+elec_house_control_test <- elec[6:length(elec$Control.of.House),] |> 
+  dplyr::select(Control.of.House, pred_party_control)
+
+
+data.frame(Year = seq(1978,2020,2),
+           Control_of_House = elec[,"Control.of.House"] ,
+           Predicted_House_Control = elec[,"pred_party_control"]) |> 
+  filter(Year != 1978)
+
+
+table(elec[,"pred_party_control"], elec[,"Control.of.House"])  # 20 out of last congressional Election
+
+```
+### Comments:
+
+In the last 21 Congressional elections, the model correctly predicted the control of the house 20 times.
+The model wrongly predicted a Democratic Control in 1996 when President Clinton was running for re-election.
+The model was expecting 214 GOP Seats and 221 DEM Seats. However, the actual GOP-DEM seats are 226-209 and the error was 12 seats. 
+
+
+
+
+## 1-Step Forecast Cross Validation for Year 2016, 2018, 2020
+
+```{r}
+
+###########################################
+##Out of Sample Testing. Outsample :2020 ##
+###########################################
+
+incum_party_change2 <- window(elec_ts[,12], start= 1980, end = 2018)
+incum_running2 <- window(elec_ts[,10], start= 1980, end = 2018)
+pres_party_seats2 <- window(elec_ts[,13], start = 1980, end = 2018)
+ar_ts2 <- window(ts(ar, start = 1970, deltat = 2), start = 1980, end = 2018)
+pres2 <- window(elec_ts[,"President"], start = 1980, end = 2018)
+
+cs_adj_ts2 <- window(ts(cs_ts, start = c(1980), deltat = 2), end = 2018)
+
+
+model_2020 <- tslm(incum_party_change2~cs_adj_ts2 + incum_running2 + I(pres_party_seats2^2) +ar_ts2 + pres2)
+
+avgcs_2019_2020 <- cs |> 
+  filter(Year == 2020 )
+
+exante_fc_out <- data.frame(cs_adj_ts2 = avgcs_2019_2020$consumer_sentiment,
+                            incum_running2 = 1,
+                            pres_party_seats2 = 199,
+                            ar_ts2 = 0,
+                            pres2 = 1)
+
+fc_2020 <- forecast(model_2020, exante_fc_out)
+error_2020 <- abs(round(fc_2020$mean[[1]],0) - 14)
+
+#In 2020, the model would have expected a 8 seat gain for Incumbent President's party
+#Actual Result is 14 seat gains.
+#Error = 6 Seats
+
+###########################################
+##Out of Sample Testing. Outsample :2018 ##
+###########################################
+
+incum_party_change2018 <- window(elec_ts[,12], start= 1980, end = 2016)
+incum_running2018 <- window(elec_ts[,10], start= 1980, end = 2016)
+pres_party_seats2018 <- window(elec_ts[,13], start = 1980, end = 2016)
+ar_ts2018 <- window(ts(ar, start = 1970, deltat = 2), start = 1980, end = 2016)
+cs_adj_ts2018 <- window(ts(cs_ts, start = c(1980), deltat = 2), end = 2016)
+pres2018 <- window(elec_ts[,"President"], start = 1980, end = 2016)
+
+model_2018 <- tslm(incum_party_change2018~cs_adj_ts2018 + incum_running2018 +
+                     I(pres_party_seats2018^2) + ar_ts2018 + pres2018)
+
+avgcs_2017_2018 <- cs |> 
+  filter(Year == 2018 )
+
+exante_fc_2018 <- data.frame(cs_adj_ts2018 = avgcs_2017_2018$consumer_sentiment,
+                            incum_running2018 = 0,
+                            pres_party_seats2018 = 241,
+                            ar_ts2018 = 0,
+                            pres2018 = 1)
+
+fc_2018 <- forecast(model_2018, exante_fc_2018)
+error_2018 <- abs(round(fc_2018$mean[[1]],0)- -42)
+
+#In 2018, the model would have expected a  29 seat LOSS for Incumbent President's party
+#Actual Result is 42 seat LOSS.
+#Error  = 13 seats
+
+
+
+###########################################
+##Out of Sample Testing. Outsample :2016 ##
+###########################################
+
+incum_party_change2016 <- window(elec_ts[,12], start= 1980, end = 2014)
+incum_running2016 <- window(elec_ts[,10], start= 1980, end = 2014)
+pres_party_seats2016 <- window(elec_ts[,13], start = 1980, end = 2014)
+ar_ts2016 <- window(ts(ar, start = 1970, deltat = 2), start = 1980, end = 2014)
+cs_adj_ts2016 <- window(ts(cs_ts, start = c(1980), deltat = 2), end = 2014)
+pres2016 <- window(elec_ts[,"President"], start = 1980, end = 2014)
+
+
+model_2016 <- tslm(incum_party_change2016~cs_adj_ts2016 + incum_running2016 +
+                     I(pres_party_seats2016^2) + ar_ts2016 + pres2016)
+
+avgcs_2015_2016 <- cs |> 
+  filter(Year == 2016 )
+
+exante_fc_2016 <- data.frame(cs_adj_ts2016 = avgcs_2015_2016$consumer_sentiment,
+                             incum_running2016 = 0,
+                             pres_party_seats2016 = 188,
+                             ar_ts2016 = 0,
+                             pres2016 =1 )
+
+fc_2016 <- forecast(model_2016, exante_fc_2016)
+error_2016 <- abs(round(fc_2016$mean[[1]],0)- 6)
+
+#In 2016, the model would have expected a  8 seat LOSS for Incumbent President's party
+#Actual Result is 6 seat GAIN.
+#Error = 14 seats
+
+avg_error <- round(mean(c(error_2016, error_2018, error_2020)),0)
+
+errors <- data.frame(error_in_2020 = error_2020, error_in_2018 = error_2018, error_in_2016 = error_2016,
+                     Average_error = avg_error)
+
+errors
+```
+## Comments: 
+
+Using 1-period cross-validation, the model's prediction error in 2016, 2018, and 2020 is 14,13, and 6 respectively. 
+
+The Model has a 1-period forecast cross-validation average error of 11 Seats. 
+
+# Forecast for 2022 Congressional House Election
+
+```{r}
+avgcs_2021_2020 <- cs |> 
+  filter(Year == 2022) 
+
+exante_fc2 <- data.frame(cs_ts = avgcs_2021_2020$consumer_sentiment, incum_running = 0,
+                        pres_party_seats = 222, ar_ts = 0 , pres = 0)
+
+
+fc2 <-forecast(model2, exante_fc2 ) 
+
+ if (exante_fc2$pres == 0){
+      
+      gop1 <- tail(elec$GOP.Seats,1) - round(fc2$mean[[1]],0)
+      dem1 <- tail(elec$DEM.Seats,1) + round(fc2$mean[[1]],0)
+    } else {
+      
+      gop1 <- tail(elec$GOP.Seats,1) + round(fc2$mean[[1]],0)
+      dem1 <- tail(elec$DEM.Seats,1) - round(fc2$mean[[1]],0)
+    }
+
+fc2_seats <- data.frame( Party = c("Republicans", "Democrats") ,
+                                Seats = c(gop1,dem1))
+
+plot3 <- fc2_seats |> 
+  ggplot(aes(x = Party , y= Seats, fill = Party)) +
+  geom_bar(stat = "identity", width = 0.4) +
+  coord_flip() +
+  geom_text(aes(label = Seats), vjust = 0.4,hjust = 1.2, size = 5, color = "white") + 
+  scale_fill_manual(values = c(Republicans = "Red", Democrats = "Blue")) +
+  labs(title = "2022 US House Election Forecast",
+       subtitle = "Model's expected result") 
+
+gop <- ts(c(tail(elec$GOP.Seats,1), tail(elec$GOP.Seats,1) - round(fc2$mean[[1]],0)), start = 2020, deltat = 2)
+dem <- ts(c(tail(elec$DEM.Seats,1), tail(elec$DEM.Seats,1) + round(fc2$mean[[1]],0)), start = 2020, deltat = 2)
+
+
+plot4 <- autoplot(ts( start = 2006, deltat = 2)) + 
+  autolayer(window(elec_ts[,4], start =2006), lwd =1,color = "Red") +
+  autolayer(window(elec_ts[,5], start =2006), lwd =1, color = "Blue") +
+  autolayer(gop, lwd =1, lty = 5, color = "Red") +
+  autolayer(dem, lwd =1, lty = 5, color = "Blue")+
+  labs( title = "2022 US House Election Forecast",
+        y = "Seats") 
+
+grid.arrange(plot3, plot4)
+
+```
+## Comments:
+
+The model expects the result to be GOP-DEM = 247-188. GOP to gain 34 Seats and DEM to lose 34 seats.
+
+
+Given there is an average 1-period cross-validation error of 11 in the last 3 years, 
+
+
+We can expect the result to be 
+
+
+GOP = 247 +/- 11
+
+
+DEM = 188 +/- 11
+
+## CAVEATS:
+
+Readers should take the model's expectations with caution.
+
+There are reasons to believe that the model may be underestimating Democratic wins for 2022.
+There was a historic supreme court rule on abortion. Also, there was redistricting that increased the number of democrat-leaning seats relative to republican-learning seats.
+Both critical factors are not captured in the model. 
+
+
+That said, the model does strongly suggest that Republicans are heading into the midterms with a great advantage. 
+Democrats are bound to lose seats in this election cycle as midterm elections almost always swing against the incumbent President's party.
+The terrible economic environment, which is reflected in the consumer sentiment index, will aggravate seat losses for Democrats this year.
+
+Considering all factors, I strongly believe that the Republicans will recapture the House of Representatives in 2022.
+
+
+Thank you for reading. You may contact me at gongchuen97@yahoo.com for questions or input. 
+
+
+
+
+
+
+
