@@ -38,7 +38,7 @@ The model variables include
 
 (3) Is the incumbent President running for re-election in that election year? 
 
-(4) Is the President hugely popular?
+(4) Is the President extremely  popular?
 
 (5) Is the President a Democrat or a Republican?
 ```{r}
@@ -57,15 +57,16 @@ The model has an Adjusted R^2 of 0.8849. All the variables are significant at a 
 
 
 The p-value of the consumer sentiment variable strongly implies that consumer sentiment (Economic Variable) has an impact on the congressional election.
+A high consumer sentiment will reduce seat losses for the incumbent President's party.
 
 
-Also, the result suggests incumbent the incumbent President can help his/her party if he/she is running in that election year. Of course, this is only possible when the congressional election takes place in a Presidential election year.
+Also, the result  strongly suggests that the incumbent President can support his/her party if he/she is running in that election year. Of course, this is only possible when the congressional election takes place in a Presidential election year.
 
-Furthermore, if the incumbent President's party was holding onto many seats, the party is bound to lose more seats. Due to gerrymandering, there will always be a fixed number of safely Republican or Democrat seats. The remaining seats are competitive and can swing both ways. If a party won big in the last election, it's quite likely that the party is holding many competitive seats. Usually, the competitive seats swing against the incumbent President's party. If the incumbent President's party has won many such seats in the last election, the party will likely lose many seats as the party will have a tough time defending competitive seats.
+The more seats the incumbent President's party is holding, the more seats the party is bound to lose. Due to gerrymandering, there will always be a fixed number of safely Republican or Democrat seats. The remaining seats are competitive and can swing both ways. If a party won big in the last election, it's quite likely that the party is holding onto any competitive seats. Usually, the competitive seats will swing against the incumbent President's party and are hard to defend. As such, the more seats that the incumbent President's party are holding, the more seats they are likely to lose.
 
-The model also suggests that Democratic Presidents tend to be able to help their party more than Republican presidents.
+The model also suggests that an incumbent Democratic President can minimize seat losses better than an incumbent Republican President.
 
-The popularity of a President only matters if the President is hugely popular. In 2002, President Bush was popular enough to support his party and the GOP won seats in an environment that was supposed to be tough for them. 
+The popularity of a President only matters if the President is extremely popular. In 2002, President Bush was popular enough to support his party and the GOP won seats in an environment where they are supposed to lose many seats.
 
 
 ## Model's Performance: Quantitative Measures
@@ -188,7 +189,9 @@ table(elec[,"pred_party_control"], elec[,"Control.of.House"])  # 20 out of last 
 ```
 ### Comments:
 
-In the last 21 Congressional elections, the model correctly predicted the control of the house 20 times.
+In the last 21 Congressional elections, the model correctly predicted the control of the house 20 times. This represents an accuracy of 95.2% 
+
+
 The model wrongly predicted a Democratic Control in 1996 when President Clinton was running for re-election.
 The model was expecting 214 GOP Seats and 221 DEM Seats. However, the actual GOP-DEM seats are 226-209 and the error was 12 seats. 
 
@@ -302,7 +305,7 @@ errors
 ```
 ## Comments: 
 
-Using 1-period cross-validation, the model's prediction error in 2016, 2018, and 2020 is 14,13, and 6 respectively. 
+Using 1-period cross-validation, the model's prediction error in 2016, 2018, and 2020 are 14,13, and 6 respectively. 
 
 The Model has a 1-period forecast cross-validation average error of 11 Seats. 
 
@@ -357,7 +360,11 @@ grid.arrange(plot3, plot4)
 ```
 ## Comments:
 
-The model expects the result to be GOP-DEM = 247-188. GOP to gain 34 Seats and DEM to lose 34 seats.
+The model expects the GOP to gain 34 Seats and DEM to lose 34 seats. Expected Result: GOP-DEM = 247-188. 
+
+
+The ex-ante forecasts are likely deterministic with >1 month to the election as the numbers for the variables are pretty much stable. 
+As such, ex-ante forecasting does not pose a problem. 
 
 
 Given there is an average 1-period cross-validation error of 11 in the last 3 years, 
@@ -375,14 +382,21 @@ DEM = 188 +/- 11
 
 Readers should take the model's expectations with caution.
 
-There are reasons to believe that the model may be underestimating Democratic wins for 2022.
-There was a historic supreme court rule on abortion. Also, there was redistricting that increased the number of democrat-leaning seats relative to republican-learning seats.
-Both critical factors are not captured in the model. 
+There are reasons to believe that the model is underestimating Democrat wins for 2022.
 
 
-That said, the model does strongly suggest that Republicans are heading into the midterms with a great advantage. 
-Democrats are bound to lose seats in this election cycle as midterm elections almost always swing against the incumbent President's party.
-The terrible economic environment, which is reflected in the consumer sentiment index, will aggravate seat losses for Democrats this year.
+(1) There was a historic supreme court rule on abortion.
+
+
+(2) There was redistricting that increased the number of democrat-leaning seats relative to republican-learning seats.
+
+
+Both factors are important, but not captured in the model. 
+
+
+Nevertheless, the model does strongly suggest that the Republicans are heading into the midterms with a great advantage. 
+Democrats are very likely to lose seats in this election cycle as midterm elections almost always swing against the incumbent President's party.
+The poor economic environment, which is reflected in the consumer sentiment index, will aggravate seat losses for the Democrats in 2022.
 
 Considering all factors, I strongly believe that the Republicans will recapture the House of Representatives in 2022.
 
